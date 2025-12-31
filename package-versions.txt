@@ -2,7 +2,7 @@
 
 # Common
 qbittorrent-release-5.1.4
-qt-v6.11.0-beta1
+qt-v6.10.1
 openssl-openssl-3.6.0-beta1
 mimalloc-v3.1.5
 distroless-sha256:b5f0eaa40ca8b4ffb054154f4a13b82ed07c22403ceddff2d9f940cb79382ada
