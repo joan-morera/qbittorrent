@@ -1,6 +1,6 @@
 # Main Application Versions
-qbittorrent-release-5.0.3
-libtorrent-v1-1.2.19
+qbittorrent-release-5.1.4
+libtorrent-v1-1.2.20
 libtorrent-v2-branch-init
 qt-v6.8.1
 boost-boost-1.88.0
