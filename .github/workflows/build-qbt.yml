@@ -54,9 +54,6 @@ jobs:
       - name: Get latest Libtorrent v2 (Default Branch)
         id: get_libt_v2
         run: |
-          # Get the HEAD ref and hash of the default branch
-          # Output format: "hash\trefs/heads/branchname"
-          # We only care about the hash
           REF=$(git ls-remote --symref https://github.com/arvidn/libtorrent.git HEAD | head -n1 | cut -f1)
           echo "ref=${REF}" >> $GITHUB_OUTPUT
 
@@ -107,7 +104,6 @@ jobs:
         run: |
             FILE="package-versions.txt"
             
-            # State Flags
             COMMON_CHANGED=false
             V1_CHANGED=false
             V2_CHANGED=false
@@ -115,7 +111,6 @@ jobs:
             check_ver() {
                NAME=$1
                NEW=$2
-               # Strip package name prefix if present
                if [[ "$NEW" == "${NAME}-"* ]]; then
                  NEW_Clean=${NEW#${NAME}-}
                else
@@ -123,13 +118,8 @@ jobs:
                fi
                
                if [[ "$NAME" == "libtorrent-v1" ]] || [[ "$NAME" == "libtorrent-v2-branch" ]]; then
-                   OLD=$(grep "^${NAME}-" $FILE | cut -d- -f4- || echo "") 
-                   # Note: libtorrent-v1-1.2.19 -> f1-f2-f3. f3 is version.
-                   # Wait, standardizing cut logic is getting messy.
-                   # Let's just use sed to extract EVERYTHING after the key name.
                    OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
                else
-                   # Standard: name-version
                    OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
                fi
 
@@ -140,7 +130,6 @@ jobs:
                return 1
             }
 
-            # Check Common Components
             if check_ver "qbittorrent" "${{ steps.get_qbt.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "qt" "${{ steps.get_qt.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "boost" "${{ steps.get_boost.outputs.tag }}"; then COMMON_CHANGED=true; fi
@@ -148,7 +137,6 @@ jobs:
             if check_ver "mimalloc" "${{ steps.get_mimalloc.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "distroless" "${{ steps.get_distroless.outputs.digest }}"; then COMMON_CHANGED=true; fi
 
-            # Check Specifics
             if check_ver "libtorrent-v1" "${{ steps.get_libt_v1.outputs.tag }}"; then V1_CHANGED=true; fi
             if check_ver "libtorrent-v2-branch" "${{ steps.get_libt_v2.outputs.ref }}"; then V2_CHANGED=true; fi
 
@@ -163,7 +151,6 @@ jobs:
                 DO_V2=true
             fi
             
-            # Manual Trigger Override
             if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
                 DO_V1=true
                 DO_V2=true
@@ -173,7 +160,7 @@ jobs:
             echo "rebuild_v2=$DO_V2" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
-  # Build V1 (Libtorrent v1.2) -> qbittorrent-rpi4
+  # Build V1 -> qbittorrent
   # ---------------------------------------------------------------------------
   build-v1:
     needs: check-versions
@@ -206,9 +193,9 @@ jobs:
           context: .
           file: Dockerfile
           push: true
+          # Push ONLY suffix tag here. Latest is handled in merge job.
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ matrix.suffix }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
@@ -262,7 +249,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=v1-rpi4
 
   # ---------------------------------------------------------------------------
-  # Build V2 (Libtorrent v2.0) -> qbittorrent-lt2
+  # Build V2 -> qbittorrent-lt2
   # ---------------------------------------------------------------------------
   build-v2:
     needs: check-versions
@@ -297,7 +284,6 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ matrix.suffix }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
@@ -351,11 +337,50 @@ jobs:
           cache-to: type=gha,mode=max,scope=v2-rpi4
 
   # ---------------------------------------------------------------------------
+  # Manifest Merges (Create 'latest' for each package)
+  # ---------------------------------------------------------------------------
+  merge-v1:
+    needs: build-v1
+    if: always() && needs.build-v1.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create V1 Manifest (latest)
+        run: |
+           IMAGE="ghcr.io/${{ github.repository_owner }}/qbittorrent"
+           docker buildx imagetools create -t $IMAGE:latest \
+             $IMAGE:amd64 \
+             $IMAGE:arm64
+
+  merge-v2:
+    needs: build-v2
+    if: always() && needs.build-v2.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create V2 Manifest (latest)
+        run: |
+           IMAGE="ghcr.io/${{ github.repository_owner }}/qbittorrent-lt2"
+           docker buildx imagetools create -t $IMAGE:latest \
+             $IMAGE:amd64 \
+             $IMAGE:arm64
+
+  # ---------------------------------------------------------------------------
   # Update Git Versions
   # ---------------------------------------------------------------------------
   update-repo:
-      needs: [check-versions, build-v1, build-v1-rpi4, build-v2, build-v2-rpi4]
-      # Run if ANY build was triggered AND completed successfully (skips if they were skipped)
+      needs: [check-versions, merge-v1, build-v1-rpi4, merge-v2, build-v2-rpi4]
+      # Run if ANY build chain was triggered AND completed
       if: always() && (needs.check-versions.outputs.rebuild_v1 == 'true' || needs.check-versions.outputs.rebuild_v2 == 'true')
       runs-on: ubuntu-latest
       steps:
