@@ -67,12 +67,12 @@ jobs:
              | grep -E "refs/tags/v[0-9]+\." | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # Boost V1 (Stable - 1.88.x)
-      - name: Get Boost V1 (Stable)
+      # Boost V1 (Pinned - 1.86.x)
+      - name: Get Boost V1 (Pinned)
         id: get_boost_v1
         run: |
           TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/boostorg/boost.git \
-             | grep "refs/tags/boost-1.88" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep "refs/tags/boost-1.86" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # Boost V2 (Latest)
