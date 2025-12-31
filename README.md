@@ -36,7 +36,7 @@ I publish two separate packages depending on the **Libtorrent** version you need
 | `rpi4` | `aarch64` | v1.2.x | **RPi4 Optimized** (Cortex-A72) |
 
 ### Package 2: `qbittorrent-lt2` (Libtorrent V2)
-> Builds from the default branch (HEAD) of Libtorrent. Support for BitTorrent v2 hybrid torrents.
+> Builds from the default branch (HEAD) of Libtorrent. Support for BitTorrent v2 hybrid torrents. Uses latest Boost libraries.
 
 | Tag | Architecture | Libtorrent | Description |
 | :--- | :--- | :--- | :--- |

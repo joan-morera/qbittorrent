@@ -22,7 +22,8 @@ jobs:
       libt_v1_ver: ${{ steps.get_libt_v1.outputs.tag }}
       libt_v2_ref: ${{ steps.get_libt_v2.outputs.ref }}
       qt_ver: ${{ steps.get_qt.outputs.tag }}
-      boost_ver: ${{ steps.get_boost.outputs.tag }}
+      boost_v1_ver: ${{ steps.get_boost_v1.outputs.tag }}
+      boost_v2_ver: ${{ steps.get_boost_v2.outputs.tag }}
       ssl_ver: ${{ steps.get_ssl.outputs.tag }}
       mimalloc_ver: ${{ steps.get_mimalloc.outputs.tag }}
       distroless_digest: ${{ steps.get_distroless.outputs.digest }}
@@ -65,12 +66,20 @@ jobs:
              | grep -E "refs/tags/v[0-9]+\." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # Boost (boost-1.86.0)
-      - name: Get latest Boost
-        id: get_boost
+      # Boost V1 (Stable - 1.88.x)
+      - name: Get Boost V1 (Stable)
+        id: get_boost_v1
         run: |
           TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/boostorg/boost.git \
-             | grep "refs/tags/boost-1.86" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep "refs/tags/boost-1.88" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      # Boost V2 (Latest)
+      - name: Get Boost V2 (Latest)
+        id: get_boost_v2
+        run: |
+          TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/boostorg/boost.git \
+             | grep "refs/tags/boost-1." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # OpenSSL 3 (openssl-3.x.x)
@@ -111,17 +120,18 @@ jobs:
             check_ver() {
                NAME=$1
                NEW=$2
+               # Strip package name prefix if present
                if [[ "$NEW" == "${NAME}-"* ]]; then
                  NEW_Clean=${NEW#${NAME}-}
                else
                  NEW_Clean=$NEW
                fi
                
-               if [[ "$NAME" == "libtorrent-v1" ]] || [[ "$NAME" == "libtorrent-v2-branch" ]]; then
-                   OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
-               else
-                   OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
-               fi
+               # Generic logic: Extract everything after "key-"
+               # e.g key="boost-v1", line="boost-v1-boost-1.88.0" -> "boost-1.88.0"
+               # e.g key="qt", line="qt-v6.8.1" -> "v6.8.1"
+               
+               OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
 
                if [ "$NEW_Clean" != "$OLD" ]; then
                   echo "NEW $NAME: $NEW_Clean (was $OLD)"
@@ -132,13 +142,17 @@ jobs:
 
             if check_ver "qbittorrent" "${{ steps.get_qbt.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "qt" "${{ steps.get_qt.outputs.tag }}"; then COMMON_CHANGED=true; fi
-            if check_ver "boost" "${{ steps.get_boost.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "openssl" "${{ steps.get_ssl.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "mimalloc" "${{ steps.get_mimalloc.outputs.tag }}"; then COMMON_CHANGED=true; fi
             if check_ver "distroless" "${{ steps.get_distroless.outputs.digest }}"; then COMMON_CHANGED=true; fi
 
+            # Specifics - V1
             if check_ver "libtorrent-v1" "${{ steps.get_libt_v1.outputs.tag }}"; then V1_CHANGED=true; fi
+            if check_ver "boost-v1" "${{ steps.get_boost_v1.outputs.tag }}"; then V1_CHANGED=true; fi
+
+            # Specifics - V2
             if check_ver "libtorrent-v2-branch" "${{ steps.get_libt_v2.outputs.ref }}"; then V2_CHANGED=true; fi
+            if check_ver "boost-v2" "${{ steps.get_boost_v2.outputs.tag }}"; then V2_CHANGED=true; fi
 
             DO_V1=false
             DO_V2=false
@@ -160,7 +174,7 @@ jobs:
             echo "rebuild_v2=$DO_V2" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
-  # Build V1 -> qbittorrent
+  # Build V1 -> qbittorrent (Boost V1)
   # ---------------------------------------------------------------------------
   build-v1:
     needs: check-versions
@@ -193,14 +207,14 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          # Push ONLY suffix tag here. Latest is handled in merge job.
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ matrix.suffix }}
           build-args: |
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             # Using Boost V1
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_v1_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
              CFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
@@ -237,7 +251,8 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             # Using Boost V1
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_v1_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
              CFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
@@ -249,7 +264,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=v1-rpi4
 
   # ---------------------------------------------------------------------------
-  # Build V2 -> qbittorrent-lt2
+  # Build V2 -> qbittorrent-lt2 (Boost V2)
   # ---------------------------------------------------------------------------
   build-v2:
     needs: check-versions
@@ -288,7 +303,8 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             # Using Boost V2
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_v2_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
              CFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
@@ -325,7 +341,8 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             # Using Boost V2
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_v2_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
              CFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
@@ -380,7 +397,6 @@ jobs:
   # ---------------------------------------------------------------------------
   update-repo:
       needs: [check-versions, merge-v1, build-v1-rpi4, merge-v2, build-v2-rpi4]
-      # Run if ANY build chain was triggered AND completed
       if: always() && (needs.check-versions.outputs.rebuild_v1 == 'true' || needs.check-versions.outputs.rebuild_v2 == 'true')
       runs-on: ubuntu-latest
       steps:
@@ -393,7 +409,8 @@ jobs:
              echo "libtorrent-v1-${{ needs.check-versions.outputs.libt_v1_ver }}" >> $FILE
              echo "libtorrent-v2-branch-${{ needs.check-versions.outputs.libt_v2_ref }}" >> $FILE
              echo "qt-${{ needs.check-versions.outputs.qt_ver }}" >> $FILE
-             echo "${{ needs.check-versions.outputs.boost_ver }}" >> $FILE
+             echo "boost-v1-${{ needs.check-versions.outputs.boost_v1_ver }}" >> $FILE
+             echo "boost-v2-${{ needs.check-versions.outputs.boost_v2_ver }}" >> $FILE
              echo "${{ needs.check-versions.outputs.ssl_ver }}" >> $FILE
              echo "mimalloc-${{ needs.check-versions.outputs.mimalloc_ver }}" >> $FILE
              echo "distroless-${{ needs.check-versions.outputs.distroless_digest }}" >> $FILE
