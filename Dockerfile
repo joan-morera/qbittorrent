@@ -50,11 +50,20 @@ WORKDIR /build
 # -----------------------------------------------------------------------------
 # 2. Build OpenSSL (Static)
 # -----------------------------------------------------------------------------
-RUN echo "[BUILD] Building OpenSSL ${OPENSSL_VERSION}..." && \
+ARG TARGETARCH
+RUN echo "[BUILD] Building OpenSSL ${OPENSSL_VERSION} for ${TARGETARCH}..." && \
     wget "https://github.com/openssl/openssl/archive/refs/tags/${OPENSSL_VERSION}.tar.gz" -O openssl.tar.gz && \
     tar xzf openssl.tar.gz && \
     cd openssl-openssl-$(echo $OPENSSL_VERSION | sed 's/openssl-//') && \
-    ./config --prefix=/usr/local --openssldir=/usr/local/ssl no-shared linux-aarch64 && \
+    # Determine Architecture
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        OPENSSL_TARGET="linux-x86_64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        OPENSSL_TARGET="linux-aarch64"; \
+    else \
+        echo "Unsupported architecture: $TARGETARCH"; exit 1; \
+    fi && \
+    ./config --prefix=/usr/local --openssldir=/usr/local/ssl no-shared $OPENSSL_TARGET && \
     make -j$(nproc) && \
     make install_sw && \
     cd .. && rm -rf openssl*
