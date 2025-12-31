@@ -10,7 +10,9 @@ I also decided to build everything statically and mount it over distroless for s
 - **Size**: ~64MB Uncompressed.
 - **Arch**: Multi-arch (AMD64, ARM64) plus a specifically optimized build for RPi4 (Cortex-A72).
 - **Security**: Runs as a dedicated non-root user (`qbt`) inside a shell-less Distroless container.
-- **Optimization**: Built with `LTO`, `-O3`, and `mimalloc` (replacing the standard allocator). RPi4 variant tuned with `-mcpu=cortex-a72`.
+- **Optimization**: Built with `LTO`, `-O3`, and `mimalloc` (replacing the standard allocator).
+  - **Dependencies**: All key C++ dependencies (**Libtorrent, Qt, Boost, Mimalloc**) are also statically compiled with these hardened optimization flags.
+  - **RPi4**: The ARM64 variant is specifically tuned with `-mcpu=cortex-a72`.
 
 ## Build Policy & Versions
 The GitHub Actions workflow runs daily to check for:
