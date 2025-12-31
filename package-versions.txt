@@ -1,9 +1,9 @@
 # Main Application Versions
 qbittorrent-release-5.1.4
-libtorrent-v1-1.2.20
-libtorrent-v2-branch-init
-qt-v6.8.1
-boost-boost-1.88.0
-openssl-openssl-3.4.0
-mimalloc-v2.1.7
+libtorrent-v1-v1.2.20
+libtorrent-v2-branch-ref: refs/heads/RC_2_0
+qt-v6.10.1
+boost-1.86.0
+openssl-3.6.0
+mimalloc-v3.1.5
 distroless-sha256:b5f0eaa40ca8b4ffb054154f4a13b82ed07c22403ceddff2d9f940cb79382ada
