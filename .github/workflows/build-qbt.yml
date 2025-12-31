@@ -13,10 +13,14 @@ jobs:
   check-versions:
     runs-on: ubuntu-latest
     outputs:
-      new_version_detected: ${{ steps.check.outputs.new_version_detected }}
+      # Build Flags
+      rebuild_v1: ${{ steps.check.outputs.rebuild_v1 }}
+      rebuild_v2: ${{ steps.check.outputs.rebuild_v2 }}
+      
       # Latest Versions
       qbt_ver: ${{ steps.get_qbt.outputs.tag }}
-      libt_ver: ${{ steps.get_libt.outputs.tag }}
+      libt_v1_ver: ${{ steps.get_libt_v1.outputs.tag }}
+      libt_v2_ref: ${{ steps.get_libt_v2.outputs.ref }}
       qt_ver: ${{ steps.get_qt.outputs.tag }}
       boost_ver: ${{ steps.get_boost.outputs.tag }}
       ssl_ver: ${{ steps.get_ssl.outputs.tag }}
@@ -38,19 +42,28 @@ jobs:
             | grep "refs/tags/release-" | grep -v "rc\|beta\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # Libtorrent v1.2 (Stable Branch)
+      # Libtorrent v1.2 (Stable Branch - TAGS)
       - name: Get latest Libtorrent v1
-        id: get_libt
+        id: get_libt_v1
         run: |
           TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/arvidn/libtorrent.git \
             | grep "refs/tags/v1.2" | grep -v "RC" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
+      # Libtorrent V2 (Default Branch - HEAD COMMIT)
+      - name: Get latest Libtorrent v2 (Default Branch)
+        id: get_libt_v2
+        run: |
+          # Get the HEAD ref and hash of the default branch
+          # Output format: "hash\trefs/heads/branchname"
+          # We only care about the hash
+          REF=$(git ls-remote --symref https://github.com/arvidn/libtorrent.git HEAD | head -n1 | cut -f1)
+          echo "ref=${REF}" >> $GITHUB_OUTPUT
+
       # Qt 6 (Latest Release)
       - name: Get latest Qt 6
         id: get_qt
         run: |
-           # List remote tags and filter for v[0-9].
            TAG=$(git ls-remote --tags --sort='v:refname' https://code.qt.io/qt/qtbase.git \
              | grep -E "refs/tags/v[0-9]+\." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -93,43 +106,78 @@ jobs:
         id: check
         run: |
             FILE="package-versions.txt"
-            CHANGED=false
             
-               check_ver() {
-                  NAME=$1
-                  NEW=$2
-                  # Strip package name from NEW if present (e.g. boost-1.86 -> 1.86) to match OLD format
-                  if [[ "$NEW" == "${NAME}-"* ]]; then
-                    NEW_Clean=${NEW#${NAME}-}
-                  else
-                    NEW_Clean=$NEW
-                  fi
-                  
-                  OLD=$(grep "^${NAME}-" $FILE | cut -d- -f2- || echo "")
-                  
-                  if [ "$NEW_Clean" != "$OLD" ]; then
-                     echo "NEW $NAME: $NEW (was $OLD)"
-                     return 0
-                  fi
-                  return 1
-               }
+            # State Flags
+            COMMON_CHANGED=false
+            V1_CHANGED=false
+            V2_CHANGED=false
+            
+            check_ver() {
+               NAME=$1
+               NEW=$2
+               # Strip package name prefix if present
+               if [[ "$NEW" == "${NAME}-"* ]]; then
+                 NEW_Clean=${NEW#${NAME}-}
+               else
+                 NEW_Clean=$NEW
+               fi
+               
+               if [[ "$NAME" == "libtorrent-v1" ]] || [[ "$NAME" == "libtorrent-v2-branch" ]]; then
+                   OLD=$(grep "^${NAME}-" $FILE | cut -d- -f4- || echo "") 
+                   # Note: libtorrent-v1-1.2.19 -> f1-f2-f3. f3 is version.
+                   # Wait, standardizing cut logic is getting messy.
+                   # Let's just use sed to extract EVERYTHING after the key name.
+                   OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
+               else
+                   # Standard: name-version
+                   OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
+               fi
 
-            if check_ver "qbittorrent" "${{ steps.get_qbt.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "libtorrent" "${{ steps.get_libt.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "qt" "${{ steps.get_qt.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "boost" "${{ steps.get_boost.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "openssl" "${{ steps.get_ssl.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "mimalloc" "${{ steps.get_mimalloc.outputs.tag }}"; then CHANGED=true; fi
-            if check_ver "distroless" "${{ steps.get_distroless.outputs.digest }}"; then CHANGED=true; fi
+               if [ "$NEW_Clean" != "$OLD" ]; then
+                  echo "NEW $NAME: $NEW_Clean (was $OLD)"
+                  return 0
+               fi
+               return 1
+            }
 
-            echo "new_version_detected=$CHANGED" >> $GITHUB_OUTPUT
+            # Check Common Components
+            if check_ver "qbittorrent" "${{ steps.get_qbt.outputs.tag }}"; then COMMON_CHANGED=true; fi
+            if check_ver "qt" "${{ steps.get_qt.outputs.tag }}"; then COMMON_CHANGED=true; fi
+            if check_ver "boost" "${{ steps.get_boost.outputs.tag }}"; then COMMON_CHANGED=true; fi
+            if check_ver "openssl" "${{ steps.get_ssl.outputs.tag }}"; then COMMON_CHANGED=true; fi
+            if check_ver "mimalloc" "${{ steps.get_mimalloc.outputs.tag }}"; then COMMON_CHANGED=true; fi
+            if check_ver "distroless" "${{ steps.get_distroless.outputs.digest }}"; then COMMON_CHANGED=true; fi
+
+            # Check Specifics
+            if check_ver "libtorrent-v1" "${{ steps.get_libt_v1.outputs.tag }}"; then V1_CHANGED=true; fi
+            if check_ver "libtorrent-v2-branch" "${{ steps.get_libt_v2.outputs.ref }}"; then V2_CHANGED=true; fi
+
+            DO_V1=false
+            DO_V2=false
+
+            if [ "$COMMON_CHANGED" = true ] || [ "$V1_CHANGED" = true ]; then
+                DO_V1=true
+            fi
+            
+            if [ "$COMMON_CHANGED" = true ] || [ "$V2_CHANGED" = true ]; then
+                DO_V2=true
+            fi
+            
+            # Manual Trigger Override
+            if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                DO_V1=true
+                DO_V2=true
+            fi
+
+            echo "rebuild_v1=$DO_V1" >> $GITHUB_OUTPUT
+            echo "rebuild_v2=$DO_V2" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
-  # Build Generic Images (amd64, arm64)
+  # Build V1 (Libtorrent v1.2) -> qbittorrent-rpi4
   # ---------------------------------------------------------------------------
-  build-generic:
+  build-v1:
     needs: check-versions
-    if: needs.check-versions.outputs.new_version_detected == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.check-versions.outputs.rebuild_v1 == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -142,7 +190,7 @@ jobs:
             suffix: arm64
     runs-on: ${{ matrix.runner }}
     env:
-      IMAGE_NAME: qbittorrent-rpi4 # Keeping name as requested for package continuity
+      IMAGE_NAME: qbittorrent
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -152,51 +200,36 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push (${{ matrix.suffix }})
+      - name: Build and Push V1 (${{ matrix.suffix }})
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile
           push: true
-          # Generic Tags + "Latest" Strategy:
-          # We tag each arch specific image.
-          # We can't easily push a multi-arch "latest" manifest from separate matrix jobs without an extra merge step.
-          # For simplicity in this structure: 
-          # - we push :amd64 and :arm64
-          # - we push :latest (on both) which effectively makes "latest" point to whichever pushed last (NOT IDEAL).
-          # BETTER STRATEGY taken from alfis-docker reference:
-          # Just push the specific tag here. We will use a separate job to manifest them if needed, 
-          # BUT user requested: "latest, amd64 and arm64 tags all together".
-          # To do "all together" correctly with manifest list, we should use a single job with platforms: linux/amd64,linux/arm64
-          # EXCEPT we need different runners for native speed.
-          # So we adhere to: Push :amd64, :arm64.
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ matrix.suffix }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
-             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_ver }}
+             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
-             # Generic Optimization Flags (Safe for all CPUs)
              CFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
              CXXFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto
              LDFLAGS=-Wl,-z,relro -Wl,-z,now -flto
           platforms: ${{ matrix.platform }}
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=v1-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=v1-${{ matrix.suffix }}
 
-  # ---------------------------------------------------------------------------
-  # Build Optimized RPi4 Image
-  # ---------------------------------------------------------------------------
-  build-rpi4:
+  build-v1-rpi4:
     needs: check-versions
-    if: needs.check-versions.outputs.new_version_detected == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.check-versions.outputs.rebuild_v1 == 'true'
     runs-on: ubuntu-24.04-arm
     env:
-      IMAGE_NAME: qbittorrent-rpi4
+      IMAGE_NAME: qbittorrent
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -206,7 +239,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push (RPi4 Optimized)
+      - name: Build and Push V1 (RPi4)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -215,46 +248,115 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:rpi4
           build-args: |
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
-             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_ver }}
+             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
-             # RPi4 Specific Optimization Flags
              CFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
              CXXFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto
              LDFLAGS=-Wl,-z,relro -Wl,-z,now -flto
           platforms: linux/arm64
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=v1-rpi4
+          cache-to: type=gha,mode=max,scope=v1-rpi4
 
   # ---------------------------------------------------------------------------
-  # Create Manifest for Generic 'latest'
+  # Build V2 (Libtorrent v2.0) -> qbittorrent-lt2
   # ---------------------------------------------------------------------------
-  merge-manifest:
-    needs: build-generic
-    runs-on: ubuntu-latest
+  build-v2:
+    needs: check-versions
+    if: needs.check-versions.outputs.rebuild_v2 == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            suffix: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE_NAME: qbittorrent-lt2
     steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Create and Push Manifest
-        run: |
-           IMAGE="ghcr.io/${{ github.repository_owner }}/qbittorrent-rpi4"
-           docker buildx imagetools create -t $IMAGE:latest \
-             $IMAGE:amd64 \
-             $IMAGE:arm64
+
+      - name: Build and Push V2 (${{ matrix.suffix }})
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ matrix.suffix }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+             QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
+             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
+             QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
+             MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
+             CFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
+             CXXFLAGS=-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto
+             LDFLAGS=-Wl,-z,relro -Wl,-z,now -flto
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          cache-from: type=gha,scope=v2-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=v2-${{ matrix.suffix }}
+
+  build-v2-rpi4:
+    needs: check-versions
+    if: needs.check-versions.outputs.rebuild_v2 == 'true'
+    runs-on: ubuntu-24.04-arm
+    env:
+      IMAGE_NAME: qbittorrent-lt2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push V2 (RPi4)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:rpi4
+          build-args: |
+             QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
+             LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
+             QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
+             BOOST_VERSION=${{ needs.check-versions.outputs.boost_ver }}
+             OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
+             MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
+             CFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security
+             CXXFLAGS=-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto
+             LDFLAGS=-Wl,-z,relro -Wl,-z,now -flto
+          platforms: linux/arm64
+          provenance: false
+          cache-from: type=gha,scope=v2-rpi4
+          cache-to: type=gha,mode=max,scope=v2-rpi4
 
   # ---------------------------------------------------------------------------
   # Update Git Versions
   # ---------------------------------------------------------------------------
   update-repo:
-      needs: [check-versions, build-generic, build-rpi4] # Wait for all builds
-      if: always() && needs.check-versions.outputs.new_version_detected == 'true'
+      needs: [check-versions, build-v1, build-v1-rpi4, build-v2, build-v2-rpi4]
+      # Run if ANY build was triggered AND completed successfully (skips if they were skipped)
+      if: always() && (needs.check-versions.outputs.rebuild_v1 == 'true' || needs.check-versions.outputs.rebuild_v2 == 'true')
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@v4
@@ -263,7 +365,8 @@ jobs:
              FILE="package-versions.txt"
              echo "# Main Application Versions" > $FILE
              echo "qbittorrent-${{ needs.check-versions.outputs.qbt_ver }}" >> $FILE
-             echo "libtorrent-${{ needs.check-versions.outputs.libt_ver }}" >> $FILE
+             echo "libtorrent-v1-${{ needs.check-versions.outputs.libt_v1_ver }}" >> $FILE
+             echo "libtorrent-v2-branch-${{ needs.check-versions.outputs.libt_v2_ref }}" >> $FILE
              echo "qt-${{ needs.check-versions.outputs.qt_ver }}" >> $FILE
              echo "${{ needs.check-versions.outputs.boost_ver }}" >> $FILE
              echo "${{ needs.check-versions.outputs.ssl_ver }}" >> $FILE
