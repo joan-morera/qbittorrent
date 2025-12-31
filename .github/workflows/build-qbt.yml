@@ -75,12 +75,12 @@ jobs:
              | grep "refs/tags/boost-1.86" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # Boost V2 (Latest)
+      # Boost V2 (Latest - Future Proof)
       - name: Get Boost V2 (Latest)
         id: get_boost_v2
         run: |
           TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/boostorg/boost.git \
-             | grep "refs/tags/boost-1." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep -E "refs/tags/boost-[0-9]+" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # OpenSSL 3 (Latest - Aggressive)
