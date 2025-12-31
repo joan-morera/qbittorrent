@@ -37,13 +37,12 @@ ARG BOOST_VERSION
 ARG OPENSSL_VERSION
 ARG MIMALLOC_VERSION
 
-# Common Hardening & Optimization Flags (RPi4 / Cortex-A72)
-# -mcpu=cortex-a72 -mtune=cortex-a72: Optimize for RPi4 CPU
-# -mno-outline-atomics: Fix for some ARM64 atomic issues (mimalloc)
-# -flto: Link Time Optimization
-ENV CFLAGS="-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security"
-ENV CXXFLAGS="-O3 -mcpu=cortex-a72 -mtune=cortex-a72 -mno-outline-atomics -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto"
-ENV LDFLAGS="-Wl,-z,relro -Wl,-z,now -flto"
+# Common Hardening & Optimization Flags
+# Defaults are for "Generic" optimized build (-O3).
+# RPi4 specific flags (-mcpu=cortex-a72) are passed via build-args.
+ARG CFLAGS="-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security"
+ARG CXXFLAGS="-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -flto"
+ARG LDFLAGS="-Wl,-z,relro -Wl,-z,now -flto"
 
 # Working Directory
 WORKDIR /build
@@ -110,7 +109,7 @@ RUN echo "[BUILD] Building Boost ${BOOST_VERSION}..." && \
 # -----------------------------------------------------------------------------
     # Qt is massive. We configure a very minimal build for qBittorrent-nox.
     # We fetch the 'qtbase' submodule directly to avoid downloading gigabytes of unused modules.
-    echo "[BUILD] Building Qt ${QT_VERSION}..." && \
+    RUN echo "[BUILD] Building Qt ${QT_VERSION}..." && \
     QT_VER_CLEAN=$(echo $QT_VERSION | sed 's/v//') && \
     QT_VER_SHORT=$(echo $QT_VER_CLEAN | cut -d. -f1-2) && \
     wget "https://download.qt.io/official_releases/qt/${QT_VER_SHORT}/${QT_VER_CLEAN}/submodules/qtbase-everywhere-src-${QT_VER_CLEAN}.tar.xz" -O qt.tar.xz && \

@@ -6,8 +6,12 @@ Static `qbittorrent-nox` build for Raspberry Pi 4 (ARM64/Cortex-A72) on Google D
 
 - **Base:** `gcr.io/distroless/cc-debian13`
 - **Components:** qBittorrent-nox, Libtorrent v1.2, Qt 6 (Minimal/No-GUI), Boost, OpenSSL 3, Mimalloc.
-- **Flags:** `-O3`, `LTO`, `-mcpu=cortex-a72`, `-fstack-protector-strong`.
+- **Flags:** `-O3`, `LTO`, `-fstack-protector-strong`.
 - **Linking:** Fully static.
+
+### Variants
+- `:latest` / `:amd64` / `:arm64` -> Generic optimized build.
+- `:rpi4` -> Tuned for Raspberry Pi 4 (Cortex-A72).
 
 ## Automation
 
@@ -23,7 +27,7 @@ Daily cron checks upstream git tags. Rebuilds only when a new version is detecte
 ```yaml
 services:
   qbittorrent:
-    image: ghcr.io/joan-morera/qbittorrent-rpi4:latest
+    image: ghcr.io/joan-morera/qbittorrent-rpi4:rpi4  # or :latest for generic build
     container_name: qbittorrent
     restart: unless-stopped
     ports:
