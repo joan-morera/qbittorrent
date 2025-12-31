@@ -39,8 +39,7 @@ docker run -d \
 ```yaml
 services:
   qbittorrent:
-#   image: ghcr.io/joan-morera/qbittorrent-rpi4:latest # Generic optimized (AMD64/ARM64)
-    image: ghcr.io/joan-morera/qbittorrent-rpi4:rpi4   # RPi4 optimized (ARM64)
+    image: ghcr.io/joan-morera/qbittorrent-rpi4:latest
     container_name: qbittorrent
     restart: unless-stopped
     ports:
@@ -50,9 +49,6 @@ services:
     volumes:
       - qbt_data:/home/qbt
       - /path/to/downloads:/downloads
-    environment:
-      - PUID=1000
-      - PGID=1000
 
 volumes:
   qbt_data:
