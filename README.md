@@ -1,14 +1,16 @@
-# qBittorrent RPi4 (Static)
+# qBittorrent Static
 
 This is a personal Docker image for `qBittorrent-nox`, built statically.
 
-I wanted a highly optimized, lightweight headless build for my Raspberry Pi 4, ergo this repo.
+I was using the linuxserver.io alpine version but noticed performance issues with `malloc-ng` (high CPU usage/interrupts). I wanted something more optimized, so I rebuilt it using `mimalloc`.
+
+I also decided to build everything statically and mount it over distroless for superior security and a minimal footprint. 
 
 ## Features & Improvements
-- **Size**: Minimal Distroless base, stripped binaries.
+- **Size**: ~64MB Uncompressed.
 - **Arch**: Multi-arch (AMD64, ARM64) plus a specifically optimized build for RPi4 (Cortex-A72).
-- **Security**: Runs as a dedicated non-root user (`qbt`) inside the container.
-- **Optimization**: Built with `LTO`, `-O3`, and `mimalloc` for performance. RPi4 variant tuned with `-mcpu=cortex-a72`.
+- **Security**: Runs as a dedicated non-root user (`qbt`) inside a shell-less Distroless container.
+- **Optimization**: Built with `LTO`, `-O3`, and `mimalloc` (replacing the standard allocator). RPi4 variant tuned with `-mcpu=cortex-a72`.
 
 ## Build Policy & Versions
 The GitHub Actions workflow runs daily to check for:
