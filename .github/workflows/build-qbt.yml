@@ -58,13 +58,13 @@ jobs:
           REF=$(git ls-remote --symref https://github.com/arvidn/libtorrent.git HEAD | head -n1 | cut -f1)
           echo "ref=${REF}" >> $GITHUB_OUTPUT
 
-      # Qt 6 (Latest Release - Aggressive)
+      # Qt 6 (Latest Release - Stable)
       - name: Get latest Qt 6
         id: get_qt
         run: |
-           # User wants "highest tag" logic, trusting the sort.
+           # Filter out betas/RCs because they often lack standard download URLs
            TAG=$(git ls-remote --tags --sort='v:refname' https://code.qt.io/qt/qtbase.git \
-             | grep -E "refs/tags/v[0-9]+\." | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep -E "refs/tags/v[0-9]+\." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # Boost V1 (Pinned - 1.86.x)
