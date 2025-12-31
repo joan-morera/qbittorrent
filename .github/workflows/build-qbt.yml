@@ -58,12 +58,13 @@ jobs:
           REF=$(git ls-remote --symref https://github.com/arvidn/libtorrent.git HEAD | head -n1 | cut -f1)
           echo "ref=${REF}" >> $GITHUB_OUTPUT
 
-      # Qt 6 (Latest Release)
+      # Qt 6 (Latest Release - Aggressive)
       - name: Get latest Qt 6
         id: get_qt
         run: |
+           # User wants "highest tag" logic, trusting the sort.
            TAG=$(git ls-remote --tags --sort='v:refname' https://code.qt.io/qt/qtbase.git \
-             | grep -E "refs/tags/v[0-9]+\." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep -E "refs/tags/v[0-9]+\." | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # Boost V1 (Stable - 1.88.x)
@@ -82,20 +83,21 @@ jobs:
              | grep "refs/tags/boost-1." | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # OpenSSL 3 (openssl-3.x.x)
+      # OpenSSL 3 (Latest - Aggressive)
       - name: Get latest OpenSSL 3
         id: get_ssl
         run: |
+           # User wants highest tag (including 3.6.0 etc)
            TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/openssl/openssl.git \
-             | grep "refs/tags/openssl-3" | grep -v "beta\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep "refs/tags/openssl-3" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      # Mimalloc (v3.x.x)
+      # Mimalloc (Latest)
       - name: Get latest Mimalloc
         id: get_mimalloc
         run: |
            TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/microsoft/mimalloc.git \
-             | grep "refs/tags/v" | grep -v "beta" | grep -v "\^{}" | tail -n1 | sed 's/.*\///' | sed 's/\^{}//')
+             | grep "refs/tags/v" | grep -v "\^{}" | tail -n1 | sed 's/.*\///' | sed 's/\^{}//')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # Distroless Digest
@@ -120,16 +122,11 @@ jobs:
             check_ver() {
                NAME=$1
                NEW=$2
-               # Strip package name prefix if present
                if [[ "$NEW" == "${NAME}-"* ]]; then
                  NEW_Clean=${NEW#${NAME}-}
                else
                  NEW_Clean=$NEW
                fi
-               
-               # Generic logic: Extract everything after "key-"
-               # e.g key="boost-v1", line="boost-v1-boost-1.88.0" -> "boost-1.88.0"
-               # e.g key="qt", line="qt-v6.8.1" -> "v6.8.1"
                
                OLD=$(grep "^${NAME}-" $FILE | sed "s/^${NAME}-//")
 
@@ -213,7 +210,6 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             # Using Boost V1
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_v1_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
@@ -251,7 +247,6 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v1_ver }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             # Using Boost V1
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_v1_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
@@ -303,7 +298,6 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             # Using Boost V2
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_v2_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
@@ -341,7 +335,6 @@ jobs:
              QBITTORRENT_VERSION=${{ needs.check-versions.outputs.qbt_ver }}
              LIBTORRENT_VERSION=${{ needs.check-versions.outputs.libt_v2_ref }}
              QT_VERSION=${{ needs.check-versions.outputs.qt_ver }}
-             # Using Boost V2
              BOOST_VERSION=${{ needs.check-versions.outputs.boost_v2_ver }}
              OPENSSL_VERSION=${{ needs.check-versions.outputs.ssl_ver }}
              MIMALLOC_VERSION=${{ needs.check-versions.outputs.mimalloc_ver }}
@@ -404,16 +397,26 @@ jobs:
         - name: Update versions file
           run: |
              FILE="package-versions.txt"
+             
+             # Grouped Output
              echo "# Main Application Versions" > $FILE
+             echo "" >> $FILE
+             echo "# Common" >> $FILE
              echo "qbittorrent-${{ needs.check-versions.outputs.qbt_ver }}" >> $FILE
-             echo "libtorrent-v1-${{ needs.check-versions.outputs.libt_v1_ver }}" >> $FILE
-             echo "libtorrent-v2-branch-${{ needs.check-versions.outputs.libt_v2_ref }}" >> $FILE
              echo "qt-${{ needs.check-versions.outputs.qt_ver }}" >> $FILE
-             echo "boost-v1-${{ needs.check-versions.outputs.boost_v1_ver }}" >> $FILE
-             echo "boost-v2-${{ needs.check-versions.outputs.boost_v2_ver }}" >> $FILE
-             echo "${{ needs.check-versions.outputs.ssl_ver }}" >> $FILE
+             echo "openssl-${{ needs.check-versions.outputs.ssl_ver }}" >> $FILE
              echo "mimalloc-${{ needs.check-versions.outputs.mimalloc_ver }}" >> $FILE
              echo "distroless-${{ needs.check-versions.outputs.distroless_digest }}" >> $FILE
+             echo "" >> $FILE
+             
+             echo "# Libtorrent V1" >> $FILE
+             echo "libtorrent-v1-${{ needs.check-versions.outputs.libt_v1_ver }}" >> $FILE
+             echo "boost-v1-${{ needs.check-versions.outputs.boost_v1_ver }}" >> $FILE
+             echo "" >> $FILE
+             
+             echo "# Libtorrent V2" >> $FILE
+             echo "libtorrent-v2-branch-${{ needs.check-versions.outputs.libt_v2_ref }}" >> $FILE
+             echo "boost-v2-${{ needs.check-versions.outputs.boost_v2_ver }}" >> $FILE
              
              git config --global user.name 'github-actions[bot]'
              git config --global user.email 'github-actions[bot]@users.noreply.github.com'
