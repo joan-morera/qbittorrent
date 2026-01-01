@@ -168,8 +168,11 @@ RUN echo "[BUILD] Building Boost ${BOOST_VERSION}..." && \
 # 6. Build Libtorrent (Static)
 # -----------------------------------------------------------------------------
 RUN echo "[BUILD] Building Libtorrent ${LIBTORRENT_VERSION}..." && \
-    git clone --depth 1 --branch ${LIBTORRENT_VERSION} --recurse-submodules https://github.com/arvidn/libtorrent.git && \
+    # Clone full repo (needed to checkout specific commit hash for V2)
+    git clone --recurse-submodules https://github.com/arvidn/libtorrent.git && \
     cd libtorrent && \
+    git checkout ${LIBTORRENT_VERSION} && \
+    git submodule update --init --recursive && \
     cmake -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr/local \

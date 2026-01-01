@@ -55,7 +55,7 @@ jobs:
       - name: Get latest Libtorrent v2 (Default Branch)
         id: get_libt_v2
         run: |
-          REF=$(git ls-remote --symref https://github.com/arvidn/libtorrent.git HEAD | head -n1 | cut -f1)
+          REF=$(git ls-remote https://github.com/arvidn/libtorrent.git HEAD | awk '{print $1}')
           echo "ref=${REF}" >> $GITHUB_OUTPUT
 
       # Qt 6 (Latest Release - Stable)
