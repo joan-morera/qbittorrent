@@ -95,8 +95,10 @@ jobs:
              | grep -v "\^{}" \
              | sed 's/.*\///' \
              | sed 's/^openssl-//' \
+             | sed 's/-beta/~beta/' | sed 's/-rc/~rc/' | sed 's/-alpha/~alpha/' \
              | sort -V \
-             | tail -n1)
+             | tail -n1 \
+             | sed 's/~beta/-beta/' | sed 's/~rc/-rc/' | sed 's/~alpha/-alpha/')
            echo "tag=openssl-${VER}" >> $GITHUB_OUTPUT
 
       # Mimalloc (Latest)
