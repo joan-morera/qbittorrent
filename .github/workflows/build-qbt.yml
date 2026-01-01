@@ -89,7 +89,7 @@ jobs:
         run: |
            # User wants highest tag (including 3.6.0 etc)
            TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/openssl/openssl.git \
-             | grep "refs/tags/openssl-3" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
+             | grep "refs/tags/openssl-3" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
            echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       # Mimalloc (Latest)
