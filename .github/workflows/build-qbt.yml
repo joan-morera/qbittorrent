@@ -87,10 +87,17 @@ jobs:
       - name: Get latest OpenSSL 3
         id: get_ssl
         run: |
-           # User wants highest tag (including 3.6.0 etc)
-           TAG=$(git ls-remote --tags --sort='v:refname' https://github.com/openssl/openssl.git \
-             | grep "refs/tags/openssl-3" | grep -v "beta\|rc\|alpha" | grep -v "\^{}" | tail -n1 | sed 's/.*\///')
-           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+           # User wants highest tag (including betas if newer than stable).
+           # We strip 'openssl-' prefix to use 'sort -V' (Semantic Versioning),
+           # then re-add it. This ensures 3.6.0-beta1 < 3.6.0.
+           VER=$(git ls-remote --tags https://github.com/openssl/openssl.git \
+             | grep "refs/tags/openssl-3" \
+             | grep -v "\^{}" \
+             | sed 's/.*\///' \
+             | sed 's/^openssl-//' \
+             | sort -V \
+             | tail -n1)
+           echo "tag=openssl-${VER}" >> $GITHUB_OUTPUT
 
       # Mimalloc (Latest)
       - name: Get latest Mimalloc
