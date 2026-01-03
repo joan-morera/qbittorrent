@@ -12,5 +12,5 @@ libtorrent-v1-v1.2.20
 boost-v1-boost-1.86.0
 
 # Libtorrent V2
-libtorrent-v2-branch-ea90da144b20b20dd421d1d551fc2891214b0b1d
+libtorrent-v2-branch-d9edfc541da3da5f41b98c09affebb92d7c47412
 boost-v2-boost-1.90.0
